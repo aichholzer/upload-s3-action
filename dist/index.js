@@ -28885,39 +28885,23 @@ const slash = (__nccwpck_require__(3433)/* ["default"] */ .Z);
 const klawSync = __nccwpck_require__(9036);
 const { lookup } = __nccwpck_require__(3583);
 
-const AWS_KEY_ID = core.getInput('aws_key_id', {
-  required: true,
-});
-const SECRET_ACCESS_KEY = core.getInput('aws_secret_access_key', {
-  required: true,
-});
-const BUCKET = core.getInput('aws_bucket', {
-  required: true,
-});
-const SOURCE_DIR = core.getInput('source_dir', {
-  required: true,
-});
-const DESTINATION_DIR = core.getInput('destination_dir', {
-  required: false,
-});
-const ENDPOINT = core.getInput('endpoint', {
-  required: false,
-});
+const accessKeyId = core.getInput('aws_key_id', { required: true });
+const secretAccessKey = core.getInput('aws_secret_access_key', { required: true });
+const Bucket = core.getInput('aws_bucket', { required: true });
+const SOURCE_DIR = core.getInput('source_dir', { required: true });
+const DESTINATION_DIR = core.getInput('destination_dir', { required: false });
+const endpoint = core.getInput('s3_endpoint', { required: false });
+const ACL = core.getInput('acl', { required: false });
 
-const s3options = {
-  accessKeyId: AWS_KEY_ID,
-  secretAccessKey: SECRET_ACCESS_KEY,
-};
-
-if (ENDPOINT) {
-  s3options.endpoint = ENDPOINT;
-}
-
-const s3 = new S3(s3options);
+const s3 = new S3({
+  accessKeyId,
+  secretAccessKey,
+  ...(endpoint && {
+    endpoint
+  })
+});
 const destinationDir = DESTINATION_DIR === '/' ? shortid() : DESTINATION_DIR;
-const paths = klawSync(SOURCE_DIR, {
-  nodir: true,
-});
+const paths = klawSync(SOURCE_DIR, { nodir: true });
 
 function upload(params) {
   return new Promise((resolve) => {
@@ -28934,18 +28918,15 @@ function run() {
   const sourceDir = slash(path.join(process.cwd(), SOURCE_DIR));
   return Promise.all(
     paths.map((p) => {
-      const fileStream = fs.createReadStream(p.path);
-      const bucketPath = slash(
-        path.join(destinationDir, slash(path.relative(sourceDir, p.path)))
-      );
-      const params = {
-        Bucket: BUCKET,
-        ACL: 'public-read',
-        Body: fileStream,
-        Key: bucketPath,
+      const Key = slash(path.join(destinationDir, slash(path.relative(sourceDir, p.path))));
+
+      return upload({
+        Key,
+        Bucket,
+        Body: fs.createReadStream(p.path),
         ContentType: lookup(p.path) || 'text/plain',
-      };
-      return upload(params);
+        ...(ACL && { ACL })
+      });
     })
   );
 }
